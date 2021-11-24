@@ -28,7 +28,7 @@ get_children <- function(phylotable, parent) {
   if (any(class(phylotable) %in% c("phylo"))) {
     phylotable <- tibble::as_tibble(phylotable)
   }
-  children_vector <- pull(phylotable[phylotable$parent==parent,'node'],node)
+  children_vector <- dplyr::pull(phylotable[phylotable$parent==parent,],node,name = label)
   if (length(children_vector)==0) {
     return(parent)
   }
@@ -152,6 +152,53 @@ get_offspring <- function(phylotable, ancestor) {
   rm(answer_env)
   return(answer_vector)
 }
+
+#' Prints nwk format recursively
+#'
+#'  depth is the key! -1 to print everything, 0 prints nothing
+#' 
+#'
+#' @param phylotable Phylo object or tibble from phylo that is being queried
+#' @param ancestor The node you want to investigate
+#' @param env The environment to which to write the answers
+#' @return A boolean set to TRUE if the node has no further descendents
+.printClade <- function(phylotable,parent, depth=-1) {
+  if (depth == 0) {return(c(""))}
+  if (is_leaf(phylotable, parent)) { depth = 1 }
+  children <- get_children(phylotable = phylotable, parent)
+  names(children)[names(children)==""] <- as.character(children[names(children)==""])
+  children_result <- unlist(lapply(children, function(x) {.printClade(phylotable,x, depth=ifelse(depth==-1,-1,depth-1))}))
+  parent_label <- phylotable$label[phylotable$node == parent]
+  parent_label <- ifelse(parent_label=="", parent, parent_label)
+  formatString <- ifelse(depth == 1, "%.0s%s", "(%s)%s")
+  sprintf(formatString,paste0(children_result, collapse = ","), parent_label)
+}
+
+
+
+#' Transforms a table into a nwk string
+#'
+#' This function takes in a phylo object or a tibble from a phylo object and 
+#' it returns its string representation in newick format.
+#' The nodenumber is overwriten by the labels, if present.
+#' 
+#'
+#' @param phylotable Phylo object or tibble from phylo. fmt as: parent,node,<label>
+#' @return A string with a rooted nwk string
+#' @export
+#TODO add distances ? how do distances get represented
+transform_phylotable <- function(phylotable) {
+  rootNode <- find_root(phylotable)
+  clades <- get_children(phylotable = phylotable, parent = rootNode)
+  results <- unlist(lapply(clades, function(x) {
+    if (x==rootNode) {
+      return()
+    }
+    .printClade(phylotable, x, depth = -1)
+  }))
+  sprintf("(%s)%s;",paste0(results, collapse = ","),rootNode)
+}
+
 
 #' Default coloring scale for all things CRYPTOCOCCUS
 #'
