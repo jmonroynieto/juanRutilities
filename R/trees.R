@@ -183,7 +183,7 @@ get_offspring <- function(phylotable, ancestor) {
 #' The nodenumber is overwriten by the labels, if present.
 #' 
 #'
-#' @param phylotable Phylo object or tibble from phylo. fmt as: parent,node,<label>
+#' @param phylotable Phylo object or tibble from phylo. fmt as: parent,node,\<label\>
 #' @return A string with a rooted nwk string
 #' @export
 #TODO add distances ? how do distances get represented
@@ -197,6 +197,38 @@ transform_phylotable <- function(phylotable) {
     .printClade(phylotable, x, depth = -1)
   }))
   sprintf("(%s)%s;",paste0(results, collapse = ","),rootNode)
+}
+#' Makes the necessary changes to a phylotable to customize nodes
+#'
+#' @param phylotable Phylo object or tibble from phylo. fmt as: parent,node,\<labe\>
+#' @param old Int representing old node number
+#' @param replacement Int value to place in 
+#' @param checkForConflicts Bool value to limit the recursive calls. Do not use. this function operates under the expectation that once the nodes are replaced with random numbers, there should not be more conflicts.
+#' @return a  phylo tibble with the requested changes
+#' @export
+replaceNode <- function(phylotable, old, replacement,.checkForConflicts = TRUE) {
+  if (any(class(phylotable) %in% c("phylo"))) {
+    phylotable <- tibble::as_tibble(phylotable)
+  }
+  #warning("You hardcoded values [tag-jXEPmG]")
+  obstacles <- phylotable[phylotable$node==replacement,]
+  present_already <- c(as.integer(phylotable$label[grepl(phylotable$label, perl = T, pattern ="\\d+")]),phylotable$node)
+  unused_nodeIndexes <- Filter(x = sample(x = 1000:9000, replace = F, size = nrow(phylotable)*3),
+                               f = function(x){!(x %in%  present_already)})
+  if (.checkForConflicts == TRUE && nrow(obstacles) > 0) {
+    for (i in 1:nrow(obstacles)) {
+      phylotable <- replaceNode(phylotable,
+                                old = obstacles[[i,'node']],
+                                replacement = pop(unused_nodeIndexes),
+                                .checkForConflicts = FALSE)
+    }
+  }
+  #message(sprintf("changed %s with %s", phylotable[phylotable$node == old, 'node'], replacement))
+  phylotable[phylotable$node == old, 'node'] <- replacement
+  if (nrow(phylotable[phylotable$parent == old, 'parent'])>0) {
+    phylotable[phylotable$parent == old, 'parent'] <- replacement
+  }
+  return(phylotable)
 }
 
 

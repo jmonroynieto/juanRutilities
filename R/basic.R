@@ -1,4 +1,8 @@
 #' @export
+push <- function(x, values) (assign(as.character(substitute(x)), c(x, values), parent.frame()))
+#' @export
+pop <- function(x) {last  = x[-1:-length(x)+1]; assign(as.character(substitute(x)), x[-length(x)], parent.frame()); return(last)}
+#' @export
 showme <- function(x) { message(paste0(x, collapse = '\n'))}
 #' @export
 random_char <- function(length=6) { result <- rawToChar(as.raw(sample(c(65:90,97:122), length, replace=T))); return(result)}

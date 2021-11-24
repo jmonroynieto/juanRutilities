@@ -7,7 +7,7 @@
 transform_phylotable(phylotable)
 }
 \arguments{
-\item{phylotable}{Phylo object or tibble from phylo. fmt as: parent,node,<label>}
+\item{phylotable}{Phylo object or tibble from phylo. fmt as: parent,node,\<label\>}
 }
 \value{
 A string with a rooted nwk string
