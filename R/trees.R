@@ -266,7 +266,7 @@ replaceNode <- function(phylotable, old, replacement,.checkForConflicts = TRUE) 
 #' 
 
 find_LCA <-  function(phylotable, tiplist=NULL, nodelist=NULL) {
-  #warning("you have hardcoded values.tag-LsHEpS"); phylotable <- testerTree
+  #warning("you have hardcoded values.tag-LsHEpS"); phylotable <- set1; nodelist=NULL
   if (any(class(phylotable) %in% c("phylo"))) {
     phylo <- phylotable
     phylotable <- tibble::as_tibble(phylotable)
@@ -274,7 +274,7 @@ find_LCA <-  function(phylotable, tiplist=NULL, nodelist=NULL) {
     phylo <- ape::as.phylo(phylotable)
   }
   #this relies on NULL objects and integer(0) being ignored by append
-  #warning("You have handcoded values.tag-SZwPUf"); tiplist <- c("a","b")
+  #warning("You have handcoded values.tag-SZwPUf"); tiplist <- eta
   tiplist <- phylotable$node[phylotable$label %in% tiplist]
   requestlist <- append(nodelist, tiplist)
   
@@ -288,15 +288,15 @@ find_LCA <-  function(phylotable, tiplist=NULL, nodelist=NULL) {
                                  length(requestlist) %/% 10
                                  )
                       )
-  sampleSize <- ifelse( 25 <= sampleSize, sampleSize, 20)
+  sampleSize <- ifelse( 25 >= sampleSize, sampleSize, 20)
   nodesample  <- sample(x = requestlist,size = sampleSize, replace = F)
   #use the first tip to find path to root `rootWay`
   rootWay <- ape::nodepath(phy = as.phylo(phylotable), from = pop(nodesample), to = rootNode)
   #Find paths between the rest
   topStep <- 2
   while(length(nodesample) > 0){
-    if (topStep == rootNode) {return(topStep)}
-    stepptingStones <- ape::nodepath(phy = phylo, from = pop(nodesample), to = topStep)
+    if (rootWay[topStep] == rootNode) {return(rootWay[topStep])}
+    stepptingStones <- ape::nodepath(phy = phylo, from = pop(nodesample), to = rootWay[topStep])
     challenge <- utils::tail(which(rootWay %in% stepptingStones), n=1)
     if (challenge > topStep) { topStep <- challenge}
   }
@@ -305,9 +305,9 @@ find_LCA <-  function(phylotable, tiplist=NULL, nodelist=NULL) {
   cadidate_offspring <- get_offspring(phylotable, ancestor = rootWay[topStep])
   missingNodes <- requestlist[!(requestlist %in% cadidate_offspring)]
   if (length(missingNodes) == 0) {
-    return(candidate)
+    return(rootWay[topStep])
   } else {
-    return(find_LCA(phylotable,c(candidate,nodelist = missingTips)))
+    return(find_LCA(phylotable,nodelist = c(rootWay[topStep], missingNodes)))
   }
 }
 
