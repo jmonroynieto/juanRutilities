@@ -152,26 +152,49 @@ get_offspring <- function(phylotable, ancestor) {
   rm(answer_env)
   return(answer_vector)
 }
-
 #' Prints nwk format recursively
 #'
 #'  depth is the key! -1 to print everything, 0 prints nothing
 #' 
 #'
 #' @param phylotable Phylo object or tibble from phylo that is being queried
-#' @param ancestor The node you want to investigate
-#' @param env The environment to which to write the answers
-#' @return A boolean set to TRUE if the node has no further descendents
+#' @param parent The node you want to investigate
+#' @param depth OPTIONAL normally -1. This will return all. 0 returns nothing, one returns parent.
+#' @return A character string in nwk format
+.printClade_wLength <- function(phylotable,parent, depth=-1) {
+  if (depth == 0) {return(c(""))}
+  if (is_leaf(phylotable, parent)) { depth = 1 }
+  children <- get_children(phylotable = phylotable, parent)
+  names(children)[names(children)==""] <- as.character(children[names(children)==""])
+  children_result <- unlist(lapply(children, function(x) {.printClade_wLength(phylotable,x, depth=ifelse(depth==-1,-1,depth-1))}))
+  parent_label <- phylotable$label[phylotable$node == parent]
+  parent_label <- ifelse(parent_label=="", parent, parent_label)
+  lengthVal <- phylotable$branch.length[phylotable$node==parent]
+  formatString <- ifelse(depth == 1, "%.0s%s:%f", "(%s)%s:%f")
+  return(sprintf(formatString,paste0(children_result, collapse = ","), parent_label, lengthVal))
+}
+#' Prints nwk format recursively
+#'
+#'  depth is the key! -1 to print everything, 0 prints nothing
+#' 
+#'
+#' @param phylotable Phylo object or tibble from phylo that is being queried
+#' @param parent The node you want to investigate
+#' @param depth OPTIONAL normally -1. This will return all. 0 returns nothing, one returns parent.
+#' @return A string in newick format
 .printClade <- function(phylotable,parent, depth=-1) {
   if (depth == 0) {return(c(""))}
   if (is_leaf(phylotable, parent)) { depth = 1 }
+  if ("branch.length" %in% colnames(phylotable)) {
+    return(.printClade_wLength(phylotable, parent, depth))
+  }
   children <- get_children(phylotable = phylotable, parent)
   names(children)[names(children)==""] <- as.character(children[names(children)==""])
   children_result <- unlist(lapply(children, function(x) {.printClade(phylotable,x, depth=ifelse(depth==-1,-1,depth-1))}))
   parent_label <- phylotable$label[phylotable$node == parent]
   parent_label <- ifelse(parent_label=="", parent, parent_label)
   formatString <- ifelse(depth == 1, "%.0s%s", "(%s)%s")
-  sprintf(formatString,paste0(children_result, collapse = ","), parent_label)
+  return(sprintf(formatString,paste0(children_result, collapse = ","), parent_label))
 }
 
 
@@ -186,7 +209,6 @@ get_offspring <- function(phylotable, ancestor) {
 #' @param phylotable Phylo object or tibble from phylo. fmt as: parent,node,\<label\>
 #' @return A string with a rooted nwk string
 #' @export
-#TODO add distances ? how do distances get represented
 transform_phylotable <- function(phylotable) {
   rootNode <- find_root(phylotable)
   clades <- get_children(phylotable = phylotable, parent = rootNode)
@@ -194,7 +216,7 @@ transform_phylotable <- function(phylotable) {
     if (x==rootNode) {
       return()
     }
-    .printClade(phylotable, x, depth = -1)
+    return(.printClade(phylotable, x, depth = -1))
   }))
   sprintf("(%s)%s;",paste0(results, collapse = ","),rootNode)
 }
@@ -231,6 +253,63 @@ replaceNode <- function(phylotable, old, replacement,.checkForConflicts = TRUE) 
   return(phylotable)
 }
 
+#' Returns The Last Common Ancestor of a Set of Tips
+#' 
+#' At least one of the 
+#'
+#' @param phylotable Phylo object or tibble from phylo. fmt as: parent,node,\<labe\>
+#' @param tiplist Char vectorwith node lables to include.
+#' @param nodelist Int vector with nodes to include.
+#' @return Int representing last common ancestor
+#' @export
+#' 
+#' 
+
+find_LCA <-  function(phylotable, tiplist=NULL, nodelist=NULL) {
+  #warning("you have hardcoded values.tag-LsHEpS"); phylotable <- testerTree
+  if (any(class(phylotable) %in% c("phylo"))) {
+    phylo <- phylotable
+    phylotable <- tibble::as_tibble(phylotable)
+  } else {
+    phylo <- ape::as.phylo(phylotable)
+  }
+  #this relies on NULL objects and integer(0) being ignored by append
+  #warning("You have handcoded values.tag-SZwPUf"); tiplist <- c("a","b")
+  tiplist <- phylotable$node[phylotable$label %in% tiplist]
+  requestlist <- append(nodelist, tiplist)
+  
+  #Find root (perhaps change to do ntip+1)
+  rootNode <- find_root(phylotable)
+  #select n tips and find their moderates
+  sampleSize <- ifelse(length(requestlist)<5,
+                          length(requestlist),
+                          ifelse(length(requestlist)>5 & length(requestlist)<21,
+                                 length(requestlist) %/% 3,
+                                 length(requestlist) %/% 10
+                                 )
+                      )
+  sampleSize <- ifelse( 25 <= sampleSize, sampleSize, 20)
+  nodesample  <- sample(x = requestlist,size = sampleSize, replace = F)
+  #use the first tip to find path to root `rootWay`
+  rootWay <- ape::nodepath(phy = as.phylo(phylotable), from = pop(nodesample), to = rootNode)
+  #Find paths between the rest
+  topStep <- 2
+  while(length(nodesample) > 0){
+    if (topStep == rootNode) {return(topStep)}
+    stepptingStones <- ape::nodepath(phy = phylo, from = pop(nodesample), to = topStep)
+    challenge <- utils::tail(which(rootWay %in% stepptingStones), n=1)
+    if (challenge > topStep) { topStep <- challenge}
+  }
+  #find topmost node in 'rootWay' that is crossed
+  #test if descendants grabs all the requested nodes If not find a path to the missing nodes and the root, return the topmost intersection.
+  cadidate_offspring <- get_offspring(phylotable, ancestor = rootWay[topStep])
+  missingNodes <- requestlist[!(requestlist %in% cadidate_offspring)]
+  if (length(missingNodes) == 0) {
+    return(candidate)
+  } else {
+    return(find_LCA(phylotable,c(candidate,nodelist = missingTips)))
+  }
+}
 
 #' Default coloring scale for all things CRYPTOCOCCUS
 #'

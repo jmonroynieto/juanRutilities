@@ -3,6 +3,7 @@
 export(CryptoScale)
 export(add_path)
 export(df.fromNAMES)
+export(find_LCA)
 export(find_root)
 export(get_children)
 export(get_offspring)

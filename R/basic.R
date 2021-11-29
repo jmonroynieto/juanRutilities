@@ -1,7 +1,7 @@
 #' @export
 push <- function(x, values) (assign(as.character(substitute(x)), c(x, values), parent.frame()))
 #' @export
-pop <- function(x) {last  = x[-1:-length(x)+1]; assign(as.character(substitute(x)), x[-length(x)], parent.frame()); return(last)}
+pop <- function(x) {last  = utils::tail(x,n=1); assign(as.character(substitute(x)), x[-length(x)], parent.frame()); return(last)}
 #' @export
 showme <- function(x) { message(paste0(x, collapse = '\n'))}
 #' @export
