@@ -84,8 +84,11 @@ is_leaf <- function(phylotable, query){
 #' @return An integer representing the root node of a phylogeny
 #' @export
 find_root <- function(phylotable) {
+  if (any(class(phylotable) %in% c("phylo"))) {
+    phylotable <- tibble::as_tibble(phylotable)
+  }
   rootX <- NULL
-  node <- 1
+  node <- sample(phylotable$node, size = 1)
   while (is.null(rootX)) {
     node2 <- get_parent(phylotable, node)
     if (node == node2) {
@@ -262,9 +265,6 @@ replaceNode <- function(phylotable, old, replacement,.checkForConflicts = TRUE) 
 #' @param nodelist Int vector with nodes to include.
 #' @return Int representing last common ancestor
 #' @export
-#' 
-#' 
-
 find_LCA <-  function(phylotable, tiplist=NULL, nodelist=NULL) {
   #warning("you have hardcoded values.tag-LsHEpS"); phylotable <- set1; nodelist=NULL
   if (any(class(phylotable) %in% c("phylo"))) {
@@ -274,21 +274,16 @@ find_LCA <-  function(phylotable, tiplist=NULL, nodelist=NULL) {
     phylo <- ape::as.phylo(phylotable)
   }
   #this relies on NULL objects and integer(0) being ignored by append
-  #warning("You have handcoded values.tag-SZwPUf"); tiplist <- eta
+  #warning("You have handcoded values.tag-SZwPUf"); tiplist <- nondelta
   tiplist <- phylotable$node[phylotable$label %in% tiplist]
   requestlist <- append(nodelist, tiplist)
-  
+  if (length(requestlist) <2 ){stop("can't find the LCA of less than two nodes")}
   #Find root (perhaps change to do ntip+1)
   rootNode <- find_root(phylotable)
   #select n tips and find their moderates
   sampleSize <- ifelse(length(requestlist)<5,
                           length(requestlist),
-                          ifelse(length(requestlist)>5 & length(requestlist)<21,
-                                 length(requestlist) %/% 3,
-                                 length(requestlist) %/% 10
-                                 )
-                      )
-  sampleSize <- ifelse( 25 >= sampleSize, sampleSize, 20)
+                          4)
   nodesample  <- sample(x = requestlist,size = sampleSize, replace = F)
   #use the first tip to find path to root `rootWay`
   rootWay <- ape::nodepath(phy = as.phylo(phylotable), from = pop(nodesample), to = rootNode)
@@ -310,6 +305,42 @@ find_LCA <-  function(phylotable, tiplist=NULL, nodelist=NULL) {
     return(find_LCA(phylotable,nodelist = c(rootWay[topStep], missingNodes)))
   }
 }
+#' deletes nodes and descendants.
+#' 
+#' careful not to use labels
+#'
+#' @param phylotable Phylo object or tibble from phylo. fmt as: parent,node,\<labe\>
+#' @param nodelist Int vector with nodes to delete.
+#' @return Imodified phylotable
+#' @export
+remove_node <- function(phylotable, nodelist) {
+  if (any(class(phylotable) %in% c("phylo"))) {
+    phylotable <- tibble::as_tibble(phylotable)
+  }
+  for (n in nodelist){
+  nodelist <- c(nodelist, get_offspring(phylotable = phylotable, n))
+  }
+  return(phylotable[!(phylotable$parent %in% nodelist | phylotable$node %in% nodelist) ,])
+}
+
+#' Returns all tips for a set of node
+#' 
+#' useful to use droptips as remove_node seems to create problems
+#'
+#' @param phylotable Phylo object or tibble from phylo. fmt as: parent,node,\<labe\>
+#' @param nodelist Int vector with nodes to delete.
+#' @return Imodified phylotable
+#' @export
+get_ChildTipLabels <- function(phylotable,nodelist) {
+  results <- c()
+  for (n in nodes) {
+    all_children <- get_offspring(phylotable, ancestor = n)
+    tip_children <- all_children[attr(x=all_children, which='leaf')]
+    results <- append(results,tip_children)
+  }
+  return(phylotable$lable[phylotable$node %in% results])
+}
+
 
 #' Default coloring scale for all things CRYPTOCOCCUS
 #'
@@ -331,3 +362,14 @@ CryptoScale <- ggplot2::scale_color_manual(values = c(
   "VNIII" = "#bfb25f" ,
   "VNIV" = "#f57c4c"
 ), na.value = "black", name="Mol_Type", guide = ggplot2::guide_legend(override.aes = list(shape = "c")))
+
+
+
+# notes to dev: ---------------
+#  *rootnode definition could be ntips+1 when the integer assigneation rules from ape are followed
+#  *find_root() currently sends around the phylotable and subsequent parents over and over, this is ineficient although not very slow even for large phylos.
+#     I'd like to see if the much more streamlined method from ape with a vector lookup where the node is the index and each value is the parent would be faster.
+#  *findLCA samplesize might be a bit big. initially I thought that 25 top seemed like a realistic thing but it is just too inneficient as local maximum of the 
+#     sample selection are very likely and shifting quickly to the missing tips would be more valuable than spinning wheels.
+# *It's been just a few days but I forget why I use ggplot. I'd like to know and see if that can be corrected as currently I am not 
+# * get parent and get child should be able to work with labels
